@@ -11,7 +11,6 @@ const client = new graphqlReq.GraphQLClient('https://api.github.com/graphql', {
 
 var repoFilterExpr = /atom/i;
 
-
 const repoQuery = `
 query getRepos ($cursor: String){
     organization(login: "KaplanTestPrep") {
@@ -52,23 +51,9 @@ function getRepos(cursor = "") {
     })
 }
 
-
-const dependencyManifestQuery = `query getDependencyManifests ($repoowner: String!, $reponame: String!, $cursor: String!){
+  const dependencyQuery = `query getDependencies ($repoowner: String!, $reponame: String!, $cursor: String!){
     repository(owner: $repoowner, name: $reponame) {
-      dependencyGraphManifests(first: 100) {
-        totalCount,
-        pageInfo{endCursor,hasNextPage,hasPreviousPage}
-        nodes {
-            id
-          }
-        }
-      }
-    }
-  }
-  `
-  const dependencyQuery = `query getDependencies ($repoowner: String!, $reponame: String!, $manifestId: String!, $cursor: String!){
-    repository(owner: $repoowner, name: $reponame) {
-      dependencyGraphManifests(id:) {
+      dependencyGraphManifests(first:100,after:$cursor) {
         totalCount,
         pageInfo{endCursor,hasNextPage,hasPreviousPage}
         nodes {
