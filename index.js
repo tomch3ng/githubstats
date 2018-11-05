@@ -1,9 +1,11 @@
-var graphqlReq = require('graphql-request');
+const graphqlReq = require('graphql-request');
 const jsonfile = require('jsonfile');
+const nugetStats = require('nuget.getstats');
+const pkgstat = require('pkgstat');
 
 var ghToken = process.env.GITHUB_API_KEY;
 
-var mode = "dependencies";
+var mode = "foo";
 if (process.argv.length > 2) mode = process.argv[2];
 
 const client = new graphqlReq.GraphQLClient('https://api.github.com/graphql', {
@@ -42,34 +44,6 @@ query getRepos ($cursor: String){
   
 `;
 
-if (mode == "repos") getRepos()
-// else if (mode == "dependencies") getDependencies();
-
-
-
-function getRepos(cursor = "") {
-    const variables = {
-        cursor: cursor
-    }
-    console.log("Name,Description,CreatedAt,PushedAt,UpdatedAt,DependencyManifests")
-    client.request(repoQuery, variables).then(data => {
-        var repos = data.organization.repositories;
-
-        for (var i in repos.nodes) {
-            var repo = repos.nodes[i];
-            if (repoFilterExpr.test(repo.name)) {
-                console.log(repo.name+",\""+repo.description+"\","+repo.createdAt+","+repo.pushedAt+","+repo.updatedAt+","+repo.dependencyGraphManifests.totalCount)
-                // getDependencies("KaplanTestPrep", repo.name, cursor = "")
-            }
-        }
-        cursor = repos.pageInfo.endCursor;
-        var hasNextPage = repos.pageInfo.hasNextPage;
-        if (hasNextPage) getRepos(cursor);
-    }).catch(err => {
-        console.log(err.response.errors) // GraphQL response errors
-        console.log(err.response.data) // Response data if available    
-    })}
-
 const dependencyQuery = `query getDependencies ($repoowner: String!, $reponame: String!, $cursor: String!){
     repository(owner: $repoowner, name: $reponame) {
         dependencyGraphManifests(first:100) {
@@ -98,14 +72,62 @@ const dependencyQuery = `query getDependencies ($repoowner: String!, $reponame: 
 }
 `
 
-function getDependencies(repoOwner, repoName, cursor = "") {
-    var hasNextPage = false;
+if (mode == "repos") getRepos()
+else if (mode == "repodependencies") {
+    let repoName = process.argv[3];
+    getRepoDependencies(repoName);
+} else if (mode == "dependencies") {
+    let start = process.argv[3];
+    let end = process.argv[4];
+    getDependencies(start, end);
+}
+
+function getRepos(cursor = "") {
     const variables = {
-        repoowner: repoOwner,
-        reponame: repoName,
         cursor: cursor
     }
-    client.request(dependencyQuery, variables).then(data => {
+    console.log("Name,Description,CreatedAt,PushedAt,UpdatedAt,DependencyManifests")
+    client.request(repoQuery, variables).then(data => {
+        var repos = data.organization.repositories;
+
+        for (var i in repos.nodes) {
+            var repo = repos.nodes[i];
+            if (repoFilterExpr.test(repo.name)) {
+                console.log(repo.name+",\""+repo.description+"\","+repo.createdAt+","+repo.pushedAt+","+repo.updatedAt+","+repo.dependencyGraphManifests.totalCount)
+                // getDependencies("KaplanTestPrep", repo.name, cursor = "")
+            }
+        }
+        cursor = repos.pageInfo.endCursor;
+        var hasNextPage = repos.pageInfo.hasNextPage;
+        if (hasNextPage) getRepos(cursor);
+    }).catch(err => {
+        console.log(err.response.errors) // GraphQL response errors
+        console.log(err.response.data) // Response data if available    
+    })}
+
+async function getDependencies(start, end) {
+    let repos = await jsonfile.readFile(repoJson);
+    for (var i = start - 1; (i < end && i < repos.length); i++ ) {
+        var repo = repos[i];
+        await getRepoDependencies(repo.name);
+    }
+}
+
+async function getRepoDependencies(repoName) {
+    var hasNextPage = true;
+    let data = {};
+    let cursor = "";
+
+    while (hasNextPage) {
+        const variables = {
+            repoowner: "KaplanTestPrep",
+            reponame: repoName,
+            cursor: cursor
+        }
+
+        data = await client.request(dependencyQuery, variables);
+        let anyNextPage = false;
+
         var manifests = data.repository.dependencyGraphManifests.nodes;
 
         for (var i in manifests) {
@@ -114,14 +136,31 @@ function getDependencies(repoOwner, repoName, cursor = "") {
             var dependencies = manifest.dependencies;
             for (var j in dependencies.nodes) {
                 var dependency = dependencies.nodes[j];
-                console.log([repoName, manifest.filename, dependency.packageManager, dependency.packageName, dependency.requirements].join(","))
+                let pkgDetails = await getPackageDetails(dependency.packageManager, dependency.packageName);
+                console.log([repoName, manifest.filename, dependency.packageManager, dependency.packageName, pkgDetails, dependency.requirements].join(","))
             }
-            cursor = dependencies.pageInfo.endCursor;
-            hasNextPage = dependencies.pageInfo.hasNextPage || hasNextPage;
+            if (dependencies.pageInfo.hasNextPage) {
+                anyNextPage = dependencies.pageInfo.hasNextPage;
+                cursor = dependencies.pageInfo.endCursor;
+
+            }
         }
-        if (hasNextPage) getDependencies(repoOwner, repoName, cursor);
-    }).catch(err => {
-        console.log(err.response.errors) // GraphQL response errors
-        console.log(err.response.data) // Response data if available    
-    })
+        hasNextPage = anyNextPage;
+    }
+}
+
+async function getPackageDetails(pkgMgr, pkgName) {
+    if (pkgMgr == 'NPM'){
+        let pkgDetails = await pkgstat(pkgName, 'node');
+        return pkgDetails.license
+    } else if (pkgMgr == 'NUGET') {
+        let pkgDetails = await nugetStats.GetNugetPackageStats(pkgName);
+        return pkgDetails.LicenseUrl;
+    } else if (pkgMgr == 'PIP') {
+        let pkgDetails = await pkgstat(pkgName, 'python');
+        return pkgDetails.license;
+    } else if (pkgMgr == 'RUBYGEMS') {
+        let pkgDetails = await pkgstat(pkgName, 'ruby');
+        return pkgDetails.license;
+    }
 }

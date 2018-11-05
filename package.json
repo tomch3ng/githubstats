@@ -5,7 +5,10 @@
   "main": "index.js",
   "dependencies": {
     "graphql-request": "^1.8.2",
-    "jsonfile": "^5.0.0"
+    "jsonfile": "^5.0.0",
+    "npmstat": "^1.0.1",
+    "nuget.getstats": "^1.0.5",
+    "pkgstat": "^1.2.4"
   },
   "devDependencies": {},
   "scripts": {
