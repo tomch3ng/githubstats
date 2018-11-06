@@ -138,7 +138,7 @@ async function getRepoDependencies(repoName) {
                 for (var j in dependencies.nodes) {
                     var dependency = dependencies.nodes[j];
                     let pkgDetails = await getPackageDetails(dependency.packageManager, dependency.packageName);
-                    console.log([repoName, manifest.filename, dependency.packageManager, dependency.packageName, pkgDetails, dependency.requirements].join(","))
+                    console.log([repoName, manifest.filename, dependency.packageManager, dependency.packageName, "\"" + pkgDetails + "\"", "\"" + dependency.requirements + "\""].join(","))
                 }
                 if (dependencies.pageInfo.hasNextPage) {
                     anyNextPage = dependencies.pageInfo.hasNextPage;

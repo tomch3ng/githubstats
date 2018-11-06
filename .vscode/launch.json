@@ -4,7 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        
+
         {
             "type": "node",
             "request": "launch",
@@ -15,12 +15,11 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Get Repo Range",
+            "name": "Get Repo Dependencies",
             "program": "${workspaceFolder}/index.js",
             "args": [
-                "dependencies",
-                "113",
-                "113"
+                "repodependencies",
+                "atom-lightning-bolt"
             ]
         }
     ]
