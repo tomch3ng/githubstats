@@ -125,42 +125,52 @@ async function getRepoDependencies(repoName) {
             cursor: cursor
         }
 
-        data = await client.request(dependencyQuery, variables);
-        let anyNextPage = false;
-
-        var manifests = data.repository.dependencyGraphManifests.nodes;
-
-        for (var i in manifests) {
-            var manifest = manifests[i];
-
-            var dependencies = manifest.dependencies;
-            for (var j in dependencies.nodes) {
-                var dependency = dependencies.nodes[j];
-                let pkgDetails = await getPackageDetails(dependency.packageManager, dependency.packageName);
-                console.log([repoName, manifest.filename, dependency.packageManager, dependency.packageName, pkgDetails, dependency.requirements].join(","))
-            }
-            if (dependencies.pageInfo.hasNextPage) {
-                anyNextPage = dependencies.pageInfo.hasNextPage;
-                cursor = dependencies.pageInfo.endCursor;
-
-            }
+        try {
+            data = await client.request(dependencyQuery, variables);
+            let anyNextPage = false;
+    
+            var manifests = data.repository.dependencyGraphManifests.nodes;
+    
+            for (var i in manifests) {
+                var manifest = manifests[i];
+    
+                var dependencies = manifest.dependencies;
+                for (var j in dependencies.nodes) {
+                    var dependency = dependencies.nodes[j];
+                    let pkgDetails = await getPackageDetails(dependency.packageManager, dependency.packageName);
+                    console.log([repoName, manifest.filename, dependency.packageManager, dependency.packageName, pkgDetails, dependency.requirements].join(","))
+                }
+                if (dependencies.pageInfo.hasNextPage) {
+                    anyNextPage = dependencies.pageInfo.hasNextPage;
+                    cursor = dependencies.pageInfo.endCursor;
+    
+                }
+            }            
+            hasNextPage = anyNextPage;
+        } catch (err) {
+            console.log("Error getting dependencies for %s at cursor %s: %s", repoName, cursor, err);
+            hasNextPage = false;
         }
-        hasNextPage = anyNextPage;
     }
 }
 
 async function getPackageDetails(pkgMgr, pkgName) {
-    if (pkgMgr == 'NPM'){
-        let pkgDetails = await pkgstat(pkgName, 'node');
-        return pkgDetails.license
-    } else if (pkgMgr == 'NUGET') {
-        let pkgDetails = await nugetStats.GetNugetPackageStats(pkgName);
-        return pkgDetails.LicenseUrl;
-    } else if (pkgMgr == 'PIP') {
-        let pkgDetails = await pkgstat(pkgName, 'python');
-        return pkgDetails.license;
-    } else if (pkgMgr == 'RUBYGEMS') {
-        let pkgDetails = await pkgstat(pkgName, 'ruby');
-        return pkgDetails.license;
+    try {
+        if (pkgMgr == 'NPM'){
+            let pkgDetails = await pkgstat(pkgName, 'node');
+            return pkgDetails.license
+        } else if (pkgMgr == 'NUGET') {
+            let pkgDetails = await nugetStats.GetNugetPackageStats(pkgName);
+            return pkgDetails.LicenseUrl;
+        } else if (pkgMgr == 'PIP') {
+            let pkgDetails = await pkgstat(pkgName, 'python');
+            return pkgDetails.license;
+        } else if (pkgMgr == 'RUBYGEMS') {
+            let pkgDetails = await pkgstat(pkgName, 'ruby');
+            return pkgDetails.license;
+        }
+    } catch (err) {
+        console.log("Error getting package details for %s package %s: %s", pkgMgr, pkgName, err);
     }
+
 }
