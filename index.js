@@ -5,13 +5,14 @@ const pkgstat = require('pkgstat');
 
 var ghToken = process.env.GITHUB_API_KEY;
 
-var mode = "foo";
+var mode = "repos";
 if (process.argv.length > 2) mode = process.argv[2];
+
 
 const client = new graphqlReq.GraphQLClient('https://api.github.com/graphql', {
     headers: {
         Authorization: 'Bearer ' + ghToken,
-        Accept: 'application/vnd.github.hawkgirl-preview+json'
+        Accept: 'application/json'
     },
 })
 
@@ -21,7 +22,7 @@ const repoJson = 'data/repos.json'
 const repoQuery = `
 query getRepos ($cursor: String){
     organization(login: "KaplanTestPrep") {
-      repositories(orderBy: {field: NAME, direction: ASC}, first: 20, after: $cursor) {
+      repositories(orderBy: {field: NAME, direction: ASC}, first: 100, after: $cursor) {
         pageInfo {
           endCursor
           startCursor
@@ -34,8 +35,13 @@ query getRepos ($cursor: String){
           createdAt,
           pushedAt,
           updatedAt,
-          dependencyGraphManifests(first:100) {
-            totalCount
+          object (expression:"master") {
+            ... on Commit {
+              history {
+                
+                totalCount
+              }
+            }
           }
         }
       }
@@ -82,28 +88,41 @@ else if (mode == "repodependencies") {
     getDependencies(start, end);
 }
 
-function getRepos(cursor = "") {
+function getRepos(cursor = null) {
     const variables = {
         cursor: cursor
     }
-    console.log("Name,Description,CreatedAt,PushedAt,UpdatedAt,DependencyManifests")
-    client.request(repoQuery, variables).then(data => {
-        var repos = data.organization.repositories;
+    console.log("Name,Description,CreatedAt,PushedAt,UpdatedAt,CommitCount")
 
-        for (var i in repos.nodes) {
-            var repo = repos.nodes[i];
-            if (repoFilterExpr.test(repo.name)) {
-                console.log(repo.name+",\""+repo.description+"\","+repo.createdAt+","+repo.pushedAt+","+repo.updatedAt+","+repo.dependencyGraphManifests.totalCount)
-                // getDependencies("KaplanTestPrep", repo.name, cursor = "")
+    try {
+        client.request(repoQuery, variables).then(data => {
+            try {
+                var repos = data.organization.repositories;
+    
+                for (var i in repos.nodes) {
+                    var repo = repos.nodes[i];
+                    // if (repoFilterExpr.test(repo.name)) {
+                        var commitCount = 0
+                        if (repo.object && repo.object.history && repo.object.history.totalCount) commitCount = repo.object.history.totalCount;
+                        console.log(repo.name+",\""+repo.description+"\","+repo.createdAt+","+repo.pushedAt+","+repo.updatedAt+","+commitCount)
+                        // getDependencies("KaplanTestPrep", repo.name, cursor = "")
+                    // }
+                }
+                cursor = repos.pageInfo.endCursor;
+                var hasNextPage = repos.pageInfo.hasNextPage;
+                if (hasNextPage) getRepos(cursor);
+            } catch (err) {
+                console.log(`Error: ${err}`);
             }
-        }
-        cursor = repos.pageInfo.endCursor;
-        var hasNextPage = repos.pageInfo.hasNextPage;
-        if (hasNextPage) getRepos(cursor);
-    }).catch(err => {
-        console.log(err.response.errors) // GraphQL response errors
-        console.log(err.response.data) // Response data if available    
-    })}
+
+        }).catch(err => {
+            console.log(`Response Errors: ${JSON.stringify(err.response.errors)}`) // GraphQL response errors
+            console.log(`Response Data: ${JSON.stringify(err.response.data)}`) // Response data if available    
+        })
+    } catch (err) {
+        console.log(`Error: ${err}`);
+    }
+}
 
 async function getDependencies(start, end) {
     let repos = await jsonfile.readFile(repoJson);
