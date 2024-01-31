@@ -116,6 +116,7 @@ function getRepos(cursor = null) {
             }
 
         }).catch(err => {
+            console.log(`Response: ${JSON.stringify(err.response.status)} ${JSON.stringify(err.response.message)}`) // HTTP response errors
             console.log(`Response Errors: ${JSON.stringify(err.response.errors)}`) // GraphQL response errors
             console.log(`Response Data: ${JSON.stringify(err.response.data)}`) // Response data if available    
         })
